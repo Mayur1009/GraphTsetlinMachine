@@ -48,7 +48,7 @@ class CommonTsetlinMachine:
         message_size=256,
         message_bits=2,
         double_hashing=False,
-        grid=(16 * 13 * 4, 1, 1),
+        grid=(16 * 13, 1, 1),
         block=(128, 1, 1),
     ):
         print("Initialization of sparse structure.")
@@ -595,7 +595,7 @@ class MultiClassGraphTsetlinMachine(CommonTsetlinMachine):
         message_size=256,
         message_bits=2,
         double_hashing=False,
-        grid=(16 * 13 * 4, 1, 1),
+        grid=(16 * 13, 1, 1),
         block=(128, 1, 1),
     ):
         super().__init__(
@@ -648,7 +648,7 @@ class GraphTsetlinMachine(CommonTsetlinMachine):
         message_size=256,
         message_bits=2,
         double_hashing=False,
-        grid=(16 * 13 * 4, 1, 1),
+        grid=(16 * 13, 1, 1),
         block=(128, 1, 1),
     ):
         super().__init__(
