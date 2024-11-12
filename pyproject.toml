@@ -9,6 +9,7 @@ dependencies = [
     "numpy<2",
     "pycuda",
     "scipy",
+    "sympy",
 ]
 readme = "README.md"
 dynamic = [

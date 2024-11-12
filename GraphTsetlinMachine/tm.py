@@ -58,7 +58,7 @@ class CommonTsetlinMachine:
 		self.T = int(T)
 
 		self.depth = depth
-		if type(s) != tuple:
+		if type(s) is not tuple:
 			self.s = (s,) * self.depth
 		else:
 			self.s = s
@@ -201,7 +201,7 @@ class CommonTsetlinMachine:
 		self.number_of_message_literals = self.number_of_message_features * 2
 		self.number_of_message_chunks = int((self.number_of_message_literals - 1) // 32 + 1)
 
-		if self.max_included_literals == None:
+		if self.max_included_literals is None:
 			self.max_included_literals = self.number_of_literals
 
 		parameters = """
@@ -289,7 +289,7 @@ class CommonTsetlinMachine:
 				self.prepare_message_ta_state(self.message_ta_state_gpu[depth], grid=self.grid, block=self.block)
 
 			cuda.Context.synchronize()
-		elif incremental == False:
+		elif not incremental:
 			self.prepare(
 				g.state,
 				self.ta_state_gpu,
