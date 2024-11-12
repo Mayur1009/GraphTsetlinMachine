@@ -80,12 +80,12 @@ for graph_id in range(args.number_of_examples):
 		Y_train[graph_id, 1] = 0
 
 	if x1 == "B" and x2 == "B":
-		Y_train[graph_id, 1] = 1
+		Y_train[graph_id, 2] = 1
 	else:
-		Y_train[graph_id, 1] = 0
+		Y_train[graph_id, 2] = 0
 
 	if np.random.rand() <= args.noise:
-		Y_train[graph_id] = 1 - Y_train[graph_id]
+		Y_train[graph_id] = -1 * (1 - Y_train[graph_id].astype(int))
 
 graphs_train.encode()
 
@@ -112,7 +112,7 @@ for graph_id in range(args.number_of_examples):
 	graphs_test.add_graph_node_edge(graph_id, "Node 1", "Node 2", edge_type)
 	graphs_test.add_graph_node_edge(graph_id, "Node 2", "Node 1", edge_type)
 
-Y_test = np.empty(args.number_of_examples, dtype=np.uint32)
+Y_test = np.empty((args.number_of_examples, 3), dtype=np.uint32)
 for graph_id in range(args.number_of_examples):
 	x1 = random.choice(["A", "B"])
 	x2 = random.choice(["A", "B"])
@@ -121,22 +121,22 @@ for graph_id in range(args.number_of_examples):
 	graphs_test.add_graph_node_property(graph_id, "Node 2", x2)
 
 	if x1 == x2:
-		Y_train[graph_id, 0] = 0
+		Y_test[graph_id, 0] = 0
 	else:
-		Y_train[graph_id, 0] = 1
+		Y_test[graph_id, 0] = 1
 
 	if x1 == "B" or x2 == "B":
-		Y_train[graph_id, 1] = 1
+		Y_test[graph_id, 1] = 1
 	else:
-		Y_train[graph_id, 1] = 0
+		Y_test[graph_id, 1] = 0
 
 	if x1 == "B" and x2 == "B":
-		Y_train[graph_id, 1] = 1
+		Y_test[graph_id, 2] = 1
 	else:
-		Y_train[graph_id, 1] = 0
+		Y_test[graph_id, 2] = 0
 
 	if np.random.rand() <= args.noise:
-		Y_train[graph_id] = 1 - Y_train[graph_id]
+		Y_test[graph_id] = -1 * (1 - Y_test[graph_id].astype(int))
 
 graphs_test.encode()
 average_accuracy = 0.0
@@ -167,3 +167,28 @@ for i in range(args.epochs):
 		"%d %.2f %.2f %.2f %.2f"
 		% (i, result_train, result_test, stop_training - start_training, stop_testing - start_testing)
 	)
+
+
+weights = tm.get_state()[1].reshape(2, -1)
+for i in range(tm.number_of_clauses):
+	print("Clause #%d W:(%d %d)" % (i, weights[0, i], weights[1, i]), end=" ")
+	l = []
+	for k in range(args.hypervector_size * 2):
+		if tm.ta_action(0, i, k):
+			if k < args.hypervector_size:
+				l.append("x%d" % (k))
+			else:
+				l.append("NOT x%d" % (k - args.hypervector_size))
+
+	# for k in range(args.message_size * 2):
+	#     if tm.ta_action(1, i, k):
+	#         if k < args.message_size:
+	#             l.append("c%d" % (k))
+	#         else:
+	#             l.append("NOT c%d" % (k - args.message_size))
+
+	print(" AND ".join(l))
+
+print(graphs_test.hypervectors)
+print(tm.hypervectors)
+print(graphs_test.edge_type_id)
