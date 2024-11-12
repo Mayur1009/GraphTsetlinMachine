@@ -27,10 +27,10 @@ current_dir = pathlib.Path(__file__).parent
 
 
 def get_kernel(file):
-    path = current_dir.joinpath(file)
-    with path.open("r") as f:
-        ker = f.read()
-    return ker
+	path = current_dir.joinpath(file)
+	with path.open("r") as f:
+		ker = f.read()
+	return ker
 
 
 code_header = """
@@ -62,4 +62,3 @@ code_header = """
 code_update = get_kernel("cuda/code_update.cu")
 code_evaluate = get_kernel("cuda/code_evaluate.cu")
 code_prepare = get_kernel("cuda/code_prepare.cu")
-
