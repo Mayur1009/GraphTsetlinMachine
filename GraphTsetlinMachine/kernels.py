@@ -62,3 +62,4 @@ code_header = """
 code_update = get_kernel("cuda/code_update.cu")
 code_evaluate = get_kernel("cuda/code_evaluate.cu")
 code_prepare = get_kernel("cuda/code_prepare.cu")
+code_transform = get_kernel("cuda/code_transform.cu")
