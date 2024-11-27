@@ -85,7 +85,7 @@ for graph_id in range(args.number_of_examples):
 		Y_train[graph_id, 2] = 0
 
 	if np.random.rand() <= args.noise:
-		Y_train[graph_id] = -1 * (1 - Y_train[graph_id].astype(int))
+		Y_train[graph_id] = 1 - Y_train[graph_id]
 
 graphs_train.encode()
 
@@ -136,7 +136,7 @@ for graph_id in range(args.number_of_examples):
 		Y_test[graph_id, 2] = 0
 
 	if np.random.rand() <= args.noise:
-		Y_test[graph_id] = -1 * (1 - Y_test[graph_id].astype(int))
+		Y_test[graph_id] = 1 - Y_test[graph_id]
 
 graphs_test.encode()
 average_accuracy = 0.0

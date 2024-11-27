@@ -786,7 +786,6 @@ class MultiClassGraphTsetlinMachine(CommonTsetlinMachine):
 	def predict(self, graphs):
 		return np.argmax(self.score(graphs), axis=1)
 
-
 class MultiOutputGraphTsetlinMachine(CommonTsetlinMachine):
 	"""
 	This class implements the MultiOuput GTM...
@@ -821,7 +820,7 @@ class MultiOutputGraphTsetlinMachine(CommonTsetlinMachine):
 			message_bits=message_bits,
 			double_hashing=double_hashing,
 			grid=grid,
-			block=block,
+			block=block
 		)
 		self.negative_clauses = 1
 
@@ -842,6 +841,7 @@ class MultiOutputGraphTsetlinMachine(CommonTsetlinMachine):
 		class_sums = self.score(graphs)
 		preds = (class_sums >= 0).astype(np.uint32)
 		return preds
+
 
 
 class GraphTsetlinMachine(CommonTsetlinMachine):
