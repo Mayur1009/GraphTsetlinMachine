@@ -146,6 +146,85 @@ class CommonTsetlinMachine:
 
 			return (message_ta_state[clause, ta // 32, self.number_of_state_bits - 1] & (1 << (ta % 32))) > 0
 
+	def convert_hv_clause_to_literals(self, clause, symbol_hv):
+		hvc_positive = clause[: (self.number_of_literals // 2)]
+		hvc_negated = clause[(self.number_of_literals // 2) :]
+		literals = np.zeros((2 * symbol_hv.shape[0]))
+		for sym_id in range(symbol_hv.shape[0]):
+			sym_hv = symbol_hv[sym_id].ravel()
+
+			pos_match = (hvc_positive[sym_hv] == 1) & 1
+			neg_match = (hvc_negated[sym_hv] == 1) & 1
+
+			literals[sym_id] = np.mean(pos_match)
+			literals[sym_id + (symbol_hv.shape[0])] = np.mean(neg_match)
+
+			# Check id symbol is included in positve part of clause
+			# if np.all(hvc_positive[sym_hv] == 1):
+			# 	literals[sym_id] = 1
+			#
+			# elif np.all(hvc_negated[sym_hv] == 1):
+			# 	literals[sym_id + (symbol_hv.shape[0])] = 1
+
+		return literals
+
+	def get_clause_literals(self, symbol_hv):
+		"""
+		Convert HV clauses to literals and return them.
+
+		:params:
+			symbol_hv: Symbol hypervectors from graphs created for training (graphs.hypervectors)
+
+		:returns:
+			float NDArray of shape (number_of_clauses, number_of_symbols)
+		"""
+		hv_clauses = self.get_hyperliterals(0)
+
+		# Must be float
+		clause_literals = np.zeros((self.number_of_clauses, 2 * symbol_hv.shape[0]))
+
+		for clause in range(self.number_of_clauses):
+			clause_literals[clause] = self.convert_hv_clause_to_literals(hv_clauses[clause], symbol_hv)
+
+		return clause_literals
+
+	def get_messages(self, depth: int, edge_types: int):
+		"""
+		Convert HV Message to clause indexes (considered as literals) and return them
+
+		:params:
+			depth: how deep do you want to go?
+			edge_types: How many types of edges did the input have?
+
+		:returns:
+			NDArray of shape (edge_types, number_of_clauses, 2 * number_of_clauses)
+		"""
+		assert depth > 0, f"Expected depth > 0, got {depth}. Depth <= 0 means surface, use get_clause_literals()"
+
+		hv_messages = self.get_hyperliterals(depth)
+
+		message_literals = np.zeros((edge_types, self.number_of_clauses, 2 * self.number_of_clauses), dtype=np.uint8)
+
+		for clause in range(self.number_of_clauses):
+			hvc_positive = hv_messages[clause, : (self.number_of_message_literals // 2)]
+			hvc_negated = hv_messages[clause, (self.number_of_message_literals // 2) :]
+
+			for sym_id in range(self.number_of_clauses):
+				for edge_type in range(edge_types):
+					sym_hv = self.hypervectors[sym_id].ravel()
+
+					# Shift the HV before matching
+					sym_hv = (sym_hv + edge_type) % self.message_size
+
+					# TODO: np.any or np.all?
+					if np.all(hvc_positive[sym_hv] == 1):
+						message_literals[edge_type, clause, sym_id] = 1
+
+					elif np.all(hvc_negated[sym_hv] == 1):
+						message_literals[edge_type, clause, sym_id + (self.number_of_clauses)] = 1
+
+		return message_literals
+
 	def get_state(self):
 		if np.array_equal(self.clause_weights, np.array([])):
 			self.ta_state = np.empty(
@@ -522,7 +601,7 @@ class CommonTsetlinMachine:
 
 		return
 
-	def _score(self, graphs):
+	def _score_init(self, graphs):
 		if not self.initialized:
 			print("Error: Model not trained.")
 			sys.exit(-1)
@@ -558,6 +637,9 @@ class CommonTsetlinMachine:
 				cuda.memcpy_htod(self.edge_test_gpu, graphs.edge)
 			else:
 				self.edge_test_gpu = cuda.mem_alloc(1)
+
+	def _score(self, graphs):
+		self._score_init(graphs)
 
 		class_sum = np.zeros((graphs.number_of_graphs, self.number_of_outputs), dtype=np.int32)
 		for e in range(graphs.number_of_graphs):
@@ -584,41 +666,7 @@ class CommonTsetlinMachine:
 		return class_sum
 
 	def transform(self, graphs):
-		if not self.initialized:
-			print("Error: Model not trained.")
-			sys.exit(-1)
-
-		if not np.array_equal(self.graphs_signature_test, graphs.signature):
-			self.graphs_signature_test = graphs.signature
-
-			self.encoded_X_test_gpu = cuda.mem_alloc(graphs.X.nbytes)
-			cuda.memcpy_htod(self.encoded_X_test_gpu, graphs.X)
-
-			self.current_clause_node_output_test_gpu = cuda.mem_alloc(
-				int(self.number_of_clauses * graphs.max_number_of_graph_node_chunks) * 4
-			)
-			self.next_clause_node_output_test_gpu = cuda.mem_alloc(
-				int(self.number_of_clauses * graphs.max_number_of_graph_node_chunks) * 4
-			)
-
-			self.clause_X_int_test_gpu = cuda.mem_alloc(
-				int(graphs.max_number_of_graph_nodes * self.number_of_message_literals) * 4
-			)
-
-			self.clause_X_test_gpu = []
-			for depth in range(self.depth - 1):
-				self.clause_X_test_gpu.append(
-					cuda.mem_alloc(int(graphs.max_number_of_graph_nodes * self.number_of_message_chunks) * 4)
-				)
-
-			self.number_of_graph_node_edges_test_gpu = cuda.mem_alloc(graphs.number_of_graph_node_edges.nbytes)
-			cuda.memcpy_htod(self.number_of_graph_node_edges_test_gpu, graphs.number_of_graph_node_edges)
-
-			if graphs.edge.nbytes > 0:
-				self.edge_test_gpu = cuda.mem_alloc(graphs.edge.nbytes)
-				cuda.memcpy_htod(self.edge_test_gpu, graphs.edge)
-			else:
-				self.edge_test_gpu = cuda.mem_alloc(1)
+		self._score_init(graphs)
 
 		class_sum = np.zeros((graphs.number_of_graphs, self.number_of_outputs), dtype=np.int32)
 		transformed_X = np.zeros((graphs.number_of_graphs, self.number_of_clauses), dtype=np.int32)
@@ -656,41 +704,7 @@ class CommonTsetlinMachine:
 		return transformed_X, class_sum
 
 	def transform_nodewise(self, graphs):
-		if not self.initialized:
-			print("Error: Model not trained.")
-			sys.exit(-1)
-
-		if not np.array_equal(self.graphs_signature_test, graphs.signature):
-			self.graphs_signature_test = graphs.signature
-
-			self.encoded_X_test_gpu = cuda.mem_alloc(graphs.X.nbytes)
-			cuda.memcpy_htod(self.encoded_X_test_gpu, graphs.X)
-
-			self.current_clause_node_output_test_gpu = cuda.mem_alloc(
-				int(self.number_of_clauses * graphs.max_number_of_graph_node_chunks) * 4
-			)
-			self.next_clause_node_output_test_gpu = cuda.mem_alloc(
-				int(self.number_of_clauses * graphs.max_number_of_graph_node_chunks) * 4
-			)
-
-			self.clause_X_int_test_gpu = cuda.mem_alloc(
-				int(graphs.max_number_of_graph_nodes * self.number_of_message_literals) * 4
-			)
-
-			self.clause_X_test_gpu = []
-			for depth in range(self.depth - 1):
-				self.clause_X_test_gpu.append(
-					cuda.mem_alloc(int(graphs.max_number_of_graph_nodes * self.number_of_message_chunks) * 4)
-				)
-
-			self.number_of_graph_node_edges_test_gpu = cuda.mem_alloc(graphs.number_of_graph_node_edges.nbytes)
-			cuda.memcpy_htod(self.number_of_graph_node_edges_test_gpu, graphs.number_of_graph_node_edges)
-
-			if graphs.edge.nbytes > 0:
-				self.edge_test_gpu = cuda.mem_alloc(graphs.edge.nbytes)
-				cuda.memcpy_htod(self.edge_test_gpu, graphs.edge)
-			else:
-				self.edge_test_gpu = cuda.mem_alloc(1)
+		self._score_init(graphs)
 
 		class_sum = np.zeros((graphs.number_of_graphs, self.number_of_outputs), dtype=np.int32)
 		transformed_X = np.zeros(
@@ -715,7 +729,9 @@ class CommonTsetlinMachine:
 				self.encoded_X_test_gpu,
 			)
 
-			transformed_X_sample_gpu = cuda.mem_alloc(int(self.number_of_clauses *  np.max(graphs.number_of_graph_nodes) * 4))
+			transformed_X_sample_gpu = cuda.mem_alloc(
+				int(self.number_of_clauses * np.max(graphs.number_of_graph_nodes) * 4)
+			)
 			self.transform_nodewise_gpu.prepared_call(
 				self.grid,
 				self.block,
@@ -727,7 +743,9 @@ class CommonTsetlinMachine:
 			cuda.memcpy_dtoh(class_sum[e, :], self.class_sum_gpu)
 			cuda.memcpy_dtoh(transformed_X[e, :], transformed_X_sample_gpu)
 
-		return transformed_X.reshape((graphs.number_of_graphs, self.number_of_clauses, np.max(graphs.number_of_graph_nodes))), class_sum
+		return transformed_X.reshape(
+			(graphs.number_of_graphs, self.number_of_clauses, np.max(graphs.number_of_graph_nodes))
+		), class_sum
 
 
 class MultiClassGraphTsetlinMachine(CommonTsetlinMachine):
@@ -786,6 +804,7 @@ class MultiClassGraphTsetlinMachine(CommonTsetlinMachine):
 	def predict(self, graphs):
 		return np.argmax(self.score(graphs), axis=1)
 
+
 class MultiOutputGraphTsetlinMachine(CommonTsetlinMachine):
 	"""
 	This class implements the MultiOuput GTM...
@@ -820,7 +839,7 @@ class MultiOutputGraphTsetlinMachine(CommonTsetlinMachine):
 			message_bits=message_bits,
 			double_hashing=double_hashing,
 			grid=grid,
-			block=block
+			block=block,
 		)
 		self.negative_clauses = 1
 
@@ -841,7 +860,6 @@ class MultiOutputGraphTsetlinMachine(CommonTsetlinMachine):
 		class_sums = self.score(graphs)
 		preds = (class_sums >= 0).astype(np.uint32)
 		return preds
-
 
 
 class GraphTsetlinMachine(CommonTsetlinMachine):
