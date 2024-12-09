@@ -179,13 +179,6 @@ class CommonTsetlinMachine:
 			literals[sym_id] = np.mean(pos_match)
 			literals[sym_id + (symbol_hv.shape[0])] = np.mean(neg_match)
 
-			# Check id symbol is included in positve part of clause
-			# if np.all(hvc_positive[sym_hv] == 1):
-			# 	literals[sym_id] = 1
-			#
-			# elif np.all(hvc_negated[sym_hv] == 1):
-			# 	literals[sym_id + (symbol_hv.shape[0])] = 1
-
 		return literals
 
 	def get_clause_literals(self, symbol_hv):
@@ -236,7 +229,6 @@ class CommonTsetlinMachine:
 					# Shift the HV before matching
 					sym_hv = (sym_hv + edge_type) % self.message_size
 
-					# TODO: np.any or np.all?
 					if np.all(hvc_positive[sym_hv] == 1):
 						message_literals[edge_type, clause, sym_id] = 1
 
