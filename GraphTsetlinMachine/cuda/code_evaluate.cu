@@ -138,7 +138,8 @@ __global__ void select_clause_updates(curandState *state, int *clause_weights, i
     state[index] = localState;
 }
 
-__global__ void calculate_messages(unsigned int *global_ta_state, int number_of_nodes, int graph_index,
+// NOTE: Implementing node_type....currently not working as intended
+__global__ void calculate_messages(unsigned int *global_ta_state, int number_of_nodes, int graph_index, int *node_type,
                                    int *global_clause_node_output, int *number_of_include_actions,
                                    unsigned int *global_X) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -170,7 +171,10 @@ __global__ void calculate_messages(unsigned int *global_ta_state, int number_of_
         for (int node_pos = 0; (node_pos < INT_SIZE) && ((node_chunk * INT_SIZE + node_pos) < number_of_nodes);
              ++node_pos) {
             int node = node_chunk * INT_SIZE + node_pos;
-
+            if (node_type[graph_index + node] != clause / CLAUSES_PER_NODE_TYPE) {
+                // printf("Skipped clause: %d node: %d, node_type: %d\n", clause, node, node_type[graph_index + node]);
+                continue;
+            }
             for (int la_chunk = 0; la_chunk < LA_CHUNKS - 1; ++la_chunk) {
                 if ((ta_state[la_chunk * STATE_BITS + STATE_BITS - 1] & X[node * LA_CHUNKS + la_chunk]) !=
                     ta_state[la_chunk * STATE_BITS + STATE_BITS - 1]) {
@@ -192,7 +196,8 @@ __global__ void calculate_messages(unsigned int *global_ta_state, int number_of_
     }
 }
 
-__global__ void calculate_messages_conditional(unsigned int *global_ta_state, int number_of_nodes,
+// NOTE: Not sure how this should change
+__global__ void calculate_messages_conditional(unsigned int *global_ta_state, int number_of_nodes, int graph_index, int *node_type,
                                                int *global_clause_node_output_condition, int *global_clause_node_output,
                                                int *number_of_include_actions, unsigned int *X) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -222,7 +227,10 @@ __global__ void calculate_messages_conditional(unsigned int *global_ta_state, in
         for (int node_pos = 0; (node_pos < INT_SIZE) && ((node_chunk * INT_SIZE + node_pos) < number_of_nodes);
              ++node_pos) {
             int node = node_chunk * INT_SIZE + node_pos;
-
+            if (node_type[graph_index + node] != clause / CLAUSES_PER_NODE_TYPE) {
+                // printf("Skipped clause: %d node: %d, node_type: %d\n", clause, node, node_type[graph_index + node]);
+                continue;
+            }
             for (int la_chunk = 0; la_chunk < MESSAGE_CHUNKS - 1; ++la_chunk) {
                 if ((ta_state[la_chunk * STATE_BITS + STATE_BITS - 1] & X[node * MESSAGE_CHUNKS + la_chunk]) !=
                     ta_state[la_chunk * STATE_BITS + STATE_BITS - 1]) {
