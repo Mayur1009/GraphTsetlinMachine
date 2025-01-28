@@ -1,5 +1,3 @@
-# TODO: Work in progress...
-
 # Copyright (c) 2024 Ole-Christoffer Granmo
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -32,7 +30,6 @@ import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 
 import GraphTsetlinMachine.kernels as kernels
-from GraphTsetlinMachine.graphs import Graphs
 
 g = curandom.XORWOWRandomNumberGenerator()
 
@@ -56,12 +53,8 @@ class CommonTsetlinMachine:
 	):
 		print("Initialization of sparse structure.")
 
-		self.clauses_per_node_type = number_of_clauses
-
-		# Moving number clauses, hashing and hypervector generation to _init_fit
-	
-		# self.number_of_clauses = number_of_clauses
-		# self.number_of_clause_chunks = (number_of_clauses - 1) // 32 + 1
+		self.number_of_clauses = number_of_clauses
+		self.number_of_clause_chunks = (number_of_clauses - 1) // 32 + 1
 		self.T = int(T)
 
 		self.depth = depth
@@ -91,6 +84,22 @@ class CommonTsetlinMachine:
 		self.ta_state = np.array([])
 		self.message_ta_state = np.array([])
 		self.clause_weights = np.array([])
+
+		if self.double_hashing:
+			from sympy import prevprime
+
+			self.message_bits = 2
+			self.hypervectors = np.zeros((self.number_of_clauses, self.message_bits), dtype=np.uint32)
+			prime = prevprime(self.message_size)
+			for i in range(self.number_of_clauses):
+				self.hypervectors[i, 0] = i % (self.message_size)
+				self.hypervectors[i, 1] = prime - (i % prime)
+		else:
+			indexes = np.arange(self.message_size, dtype=np.uint32)
+			self.hypervectors = np.zeros((self.number_of_clauses, self.message_bits), dtype=np.uint32)
+			for i in range(self.number_of_clauses):
+				self.hypervectors[i, :] = np.random.choice(indexes, size=(self.message_bits), replace=False)
+
 		self.initialized = False
 
 	def allocate_gpu_memory(self):
@@ -274,25 +283,7 @@ class CommonTsetlinMachine:
 		self.ta_state = np.array([])
 		self.clause_weights = np.array([])
 
-	def _init(self, graphs: Graphs):
-
-		self.number_of_clauses = self.clauses_per_node_type * len(graphs.node_type_id)
-		self.number_of_clause_chunks = (self.number_of_clauses - 1) // 32 + 1
-		if self.double_hashing:
-			from sympy import prevprime
-
-			self.message_bits = 2
-			self.hypervectors = np.zeros((self.number_of_clauses, self.message_bits), dtype=np.uint32)
-			prime = prevprime(self.message_size)
-			for i in range(self.number_of_clauses):
-				self.hypervectors[i, 0] = i % (self.message_size)
-				self.hypervectors[i, 1] = prime - (i % prime)
-		else:
-			indexes = np.arange(self.message_size, dtype=np.uint32)
-			self.hypervectors = np.zeros((self.number_of_clauses, self.message_bits), dtype=np.uint32)
-			for i in range(self.number_of_clauses):
-				self.hypervectors[i, :] = np.random.choice(indexes, size=(self.message_bits), replace=False)
-
+	def _init(self, graphs):
 		self.number_of_features = graphs.hypervector_size
 		self.number_of_literals = self.number_of_features * 2
 		self.number_of_ta_chunks = int((self.number_of_literals - 1) // 32 + 1)
@@ -317,8 +308,6 @@ class CommonTsetlinMachine:
 #define MAX_NODES %d
 #define MESSAGE_SIZE %d
 #define MESSAGE_BITS %d
-#define NODE_TYPES %d
-#define CLAUSES_PER_NODE_TYPE %d
 """ % (
 			self.number_of_outputs,
 			self.number_of_clauses,
@@ -332,8 +321,6 @@ class CommonTsetlinMachine:
 			graphs.max_number_of_graph_nodes,
 			self.message_size,
 			self.message_bits,
-			len(graphs.node_type_id),
-			self.clauses_per_node_type,
 		)
 
 		mod_prepare = SourceModule(parameters + kernels.code_header + kernels.code_prepare, no_extern_c=True)
@@ -361,10 +348,10 @@ class CommonTsetlinMachine:
 		self.select_clause_updates.prepare("PPPPiPP")
 
 		self.calculate_messages = mod_evaluate.get_function("calculate_messages")
-		self.calculate_messages.prepare("PiiPPPP")
+		self.calculate_messages.prepare("PiiPPP")
 
 		self.calculate_messages_conditional = mod_evaluate.get_function("calculate_messages_conditional")
-		self.calculate_messages_conditional.prepare("PiiPPPPP")
+		self.calculate_messages_conditional.prepare("PiPPPP")
 
 		self.prepare_messages = mod_evaluate.get_function("prepare_messages")
 		self.prepare_messages.prepare("iP")
@@ -384,7 +371,7 @@ class CommonTsetlinMachine:
 
 		self.initialized = True
 
-	def _init_fit(self, graphs: Graphs, encoded_Y, incremental):
+	def _init_fit(self, graphs, encoded_Y, incremental):
 		if not self.initialized:
 			self._init(graphs)
 			self.prepare(
@@ -437,10 +424,6 @@ class CommonTsetlinMachine:
 			self.number_of_graph_node_edges_train_gpu = cuda.mem_alloc(graphs.number_of_graph_node_edges.nbytes)
 			cuda.memcpy_htod(self.number_of_graph_node_edges_train_gpu, graphs.number_of_graph_node_edges)
 
-			# Node types GPU
-			self.node_type_gpu = cuda.mem_alloc(graphs.node_type.nbytes)
-			cuda.memcpy_htod(self.node_type_gpu, graphs.node_type)
-
 			if graphs.edge.nbytes > 0:
 				self.edge_train_gpu = cuda.mem_alloc(graphs.edge.nbytes)
 				cuda.memcpy_htod(self.edge_train_gpu, graphs.edge)
@@ -479,7 +462,6 @@ class CommonTsetlinMachine:
 			self.ta_state_gpu,
 			np.int32(number_of_graph_nodes),
 			np.int32(node_index),
-			self.node_type_gpu,
 			current_clause_node_output,
 			self.number_of_include_actions,
 			encoded_X,
@@ -519,8 +501,6 @@ class CommonTsetlinMachine:
 				self.block,
 				self.message_ta_state_gpu[depth],
 				number_of_graph_nodes,
-				np.int32(node_index),
-				self.node_type_gpu,
 				current_clause_node_output,
 				next_clause_node_output,
 				self.number_of_include_actions,

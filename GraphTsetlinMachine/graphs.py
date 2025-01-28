@@ -89,25 +89,15 @@ class Graphs():
 		self.graph_node_edge_counter = np.zeros(self.number_of_nodes, dtype=np.uint32)
 		self.edge_index = np.zeros(self.number_of_nodes, dtype=np.uint32)
 
-		# Store node types
-		self.node_type_id = {}
-		self.node_type = np.zeros(self.number_of_nodes, dtype=np.uint32)
-
 		self.X = np.zeros((self.number_of_nodes, self.number_of_hypervector_chunks), dtype=np.uint32)
 		self._initialize_node_hypervectors(self.hypervector_size, self.X)
 
-	# Defualt node_type for backward compatibility
-	def add_graph_node(self, graph_id, node_name, number_of_graph_node_edges, node_type_name="t1"):
+	def add_graph_node(self, graph_id, node_name, number_of_graph_node_edges):
 		if node_name not in self.graph_node_id[graph_id]:
 			self.graph_node_id[graph_id][node_name] = len(self.graph_node_id[graph_id])
 		self.number_of_graph_node_edges[self.node_index[graph_id] + self.graph_node_id[graph_id][node_name]] = number_of_graph_node_edges
 
-		if node_type_name not in self.node_type_id:
-			self.node_type_id[node_type_name] = len(self.node_type_id)
-
-		self.node_type[self.node_index[graph_id] + self.graph_node_id[graph_id][node_name]] = self.node_type_id[node_type_name]
-
-	def prepare_edge_configuration(self):
+	def prepare_edge_configuration(self):		
 		self.edge_index[1:] = np.add.accumulate(self.number_of_graph_node_edges[:-1])
 		self.edge = np.empty((self.number_of_graph_node_edges.sum(), 2), dtype=np.uint32)
 
