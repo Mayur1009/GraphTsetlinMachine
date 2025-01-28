@@ -138,9 +138,9 @@ __global__ void select_clause_updates(curandState *state, int *clause_weights, i
     state[index] = localState;
 }
 
-__global__ void calculate_messages(unsigned int *global_ta_state, int number_of_nodes, int graph_index,
-                                   int *global_clause_node_output, int *number_of_include_actions,
-                                   unsigned int *global_X) {
+__global__ void calculate_messages(unsigned int *global_ta_state, int *node_type, int number_of_node_types,
+                                   int number_of_nodes, int graph_index, int *global_clause_node_output,
+                                   int *number_of_include_actions, unsigned int *global_X) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
 
@@ -171,15 +171,20 @@ __global__ void calculate_messages(unsigned int *global_ta_state, int number_of_
              ++node_pos) {
             int node = node_chunk * INT_SIZE + node_pos;
 
-            for (int la_chunk = 0; la_chunk < LA_CHUNKS - 1; ++la_chunk) {
-                if ((ta_state[la_chunk * STATE_BITS + STATE_BITS - 1] & X[node * LA_CHUNKS + la_chunk]) !=
-                    ta_state[la_chunk * STATE_BITS + STATE_BITS - 1]) {
+            if (node_type[graph_index + node] == (clause % number_of_node_types)) {
+                for (int la_chunk = 0; la_chunk < LA_CHUNKS - 1; ++la_chunk) {
+                    if ((ta_state[la_chunk * STATE_BITS + STATE_BITS - 1] & X[node * LA_CHUNKS + la_chunk]) !=
+                        ta_state[la_chunk * STATE_BITS + STATE_BITS - 1]) {
+                        clause_node_output &= ~(1 << node_pos);
+                    }
+                }
+
+                if ((ta_state[(LA_CHUNKS - 1) * STATE_BITS + STATE_BITS - 1] & X[node * LA_CHUNKS + LA_CHUNKS - 1] &
+                     FILTER) != (ta_state[(LA_CHUNKS - 1) * STATE_BITS + STATE_BITS - 1] & FILTER)) {
                     clause_node_output &= ~(1 << node_pos);
                 }
-            }
-
-            if ((ta_state[(LA_CHUNKS - 1) * STATE_BITS + STATE_BITS - 1] & X[node * LA_CHUNKS + LA_CHUNKS - 1] &
-                 FILTER) != (ta_state[(LA_CHUNKS - 1) * STATE_BITS + STATE_BITS - 1] & FILTER)) {
+            } else {
+                // printf("Normal: Wrong node type %d for clause %d \n", node_type[graph_index + node], clause);
                 clause_node_output &= ~(1 << node_pos);
             }
         }
@@ -192,7 +197,8 @@ __global__ void calculate_messages(unsigned int *global_ta_state, int number_of_
     }
 }
 
-__global__ void calculate_messages_conditional(unsigned int *global_ta_state, int number_of_nodes,
+__global__ void calculate_messages_conditional(unsigned int *global_ta_state, int *node_type, int number_of_node_types,
+                                               int number_of_nodes, int graph_index,
                                                int *global_clause_node_output_condition, int *global_clause_node_output,
                                                int *number_of_include_actions, unsigned int *X) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -223,16 +229,21 @@ __global__ void calculate_messages_conditional(unsigned int *global_ta_state, in
              ++node_pos) {
             int node = node_chunk * INT_SIZE + node_pos;
 
-            for (int la_chunk = 0; la_chunk < MESSAGE_CHUNKS - 1; ++la_chunk) {
-                if ((ta_state[la_chunk * STATE_BITS + STATE_BITS - 1] & X[node * MESSAGE_CHUNKS + la_chunk]) !=
-                    ta_state[la_chunk * STATE_BITS + STATE_BITS - 1]) {
+            if (node_type[graph_index + node] == (clause % number_of_node_types)) {
+                for (int la_chunk = 0; la_chunk < MESSAGE_CHUNKS - 1; ++la_chunk) {
+                    if ((ta_state[la_chunk * STATE_BITS + STATE_BITS - 1] & X[node * MESSAGE_CHUNKS + la_chunk]) !=
+                        ta_state[la_chunk * STATE_BITS + STATE_BITS - 1]) {
+                        clause_node_output &= ~(1 << node_pos);
+                    }
+                }
+
+                if ((ta_state[(MESSAGE_CHUNKS - 1) * STATE_BITS + STATE_BITS - 1] &
+                     X[node * MESSAGE_CHUNKS + MESSAGE_CHUNKS - 1] & MESSAGE_FILTER) !=
+                    (ta_state[(MESSAGE_CHUNKS - 1) * STATE_BITS + STATE_BITS - 1] & MESSAGE_FILTER)) {
                     clause_node_output &= ~(1 << node_pos);
                 }
-            }
-
-            if ((ta_state[(MESSAGE_CHUNKS - 1) * STATE_BITS + STATE_BITS - 1] &
-                 X[node * MESSAGE_CHUNKS + MESSAGE_CHUNKS - 1] & MESSAGE_FILTER) !=
-                (ta_state[(MESSAGE_CHUNKS - 1) * STATE_BITS + STATE_BITS - 1] & MESSAGE_FILTER)) {
+            } else {
+                // printf("Conditional: Wrong node type %d for clause %d\n", node_type[graph_index + node], clause);
                 clause_node_output &= ~(1 << node_pos);
             }
         }
@@ -246,16 +257,6 @@ __global__ void calculate_messages_conditional(unsigned int *global_ta_state, in
                 global_clause_node_output_condition[clause * NODE_CHUNKS + node_chunk] & clause_node_output;
         }
     }
-}
-
-__device__ inline unsigned int murmur(unsigned int key, unsigned int h) {
-    for (int i = 0; i < 4; ++i) {
-        h ^= (key >> (8 * i)) & 0xff;
-        h *= 0x5bd1e995;
-        h ^= h >> 15;
-    }
-
-    return (h);
 }
 
 __global__ void prepare_messages(int number_of_nodes, unsigned int *clause_X_int) {

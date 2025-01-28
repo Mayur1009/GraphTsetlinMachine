@@ -36,6 +36,7 @@ class Graphs():
 		self.init_with = init_with
 		if self.init_with == None:
 			self.edge_type_id = {}
+			self.node_type_id = {}
 
 			self.symbol_id = {}
 			for symbol_name in symbols:
@@ -60,6 +61,7 @@ class Graphs():
 			self.number_of_hypervector_chunks = (self.hypervector_size*2 - 1) // 32 + 1
 		else:
 			self.edge_type_id = self.init_with.edge_type_id
+			self.node_type_id = self.init_with.node_type_id
 			self.symbol_id = self.init_with.symbol_id
 			self.hypervector_size = self.init_with.hypervector_size
 			self.hypervector_bits = self.init_with.hypervector_bits
@@ -85,6 +87,7 @@ class Graphs():
 		self.max_number_of_graph_nodes = self.number_of_graph_nodes.max()
 		self.max_number_of_graph_node_chunks = (self.max_number_of_graph_nodes - 1) // 32 + 1
 		self.number_of_nodes = self.number_of_graph_nodes.sum()
+		self.node_type = np.empty(self.number_of_nodes, dtype=np.uint32)
 		self.number_of_graph_node_edges = np.empty(self.number_of_nodes, dtype=np.uint32)
 		self.graph_node_edge_counter = np.zeros(self.number_of_nodes, dtype=np.uint32)
 		self.edge_index = np.zeros(self.number_of_nodes, dtype=np.uint32)
@@ -92,10 +95,17 @@ class Graphs():
 		self.X = np.zeros((self.number_of_nodes, self.number_of_hypervector_chunks), dtype=np.uint32)
 		self._initialize_node_hypervectors(self.hypervector_size, self.X)
 
-	def add_graph_node(self, graph_id, node_name, number_of_graph_node_edges):
+	def add_graph_node(self, graph_id, node_name, number_of_graph_node_edges, node_type_name='Plain'):
+		if node_type_name not in self.node_type_id:
+			self.node_type_id[node_type_name] = len(self.node_type_id)
+
 		if node_name not in self.graph_node_id[graph_id]:
 			self.graph_node_id[graph_id][node_name] = len(self.graph_node_id[graph_id])
+		self.node_type[self.node_index[graph_id] + self.graph_node_id[graph_id][node_name]] = self.node_type_id[node_type_name]
 		self.number_of_graph_node_edges[self.node_index[graph_id] + self.graph_node_id[graph_id][node_name]] = number_of_graph_node_edges
+
+	def number_of_node_types(self):
+		return len(self.node_type_id)
 
 	def prepare_edge_configuration(self):		
 		self.edge_index[1:] = np.add.accumulate(self.number_of_graph_node_edges[:-1])
@@ -110,7 +120,7 @@ class Graphs():
 
 		destination_node_id = self.graph_node_id[graph_id][destination_node_name]
 		if edge_type_name not in self.edge_type_id:
-			self.edge_type_id[edge_type_name] = len(self.edge_type_id)
+			self.edge_type_id[edge_type_name] = len(self.edge_type_id) + 1
 		edge_type_id = self.edge_type_id[edge_type_name]
 
 		edge_index = self.edge_index[self.node_index[graph_id] + source_node_id] + self.graph_node_edge_counter[self.node_index[graph_id] + source_node_id]
