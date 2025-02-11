@@ -6,23 +6,23 @@ from time import time
 import argparse
 import random
 
-
 def default_args(**kwargs):
-	parser = argparse.ArgumentParser()
-	parser.add_argument("--epochs", default=10, type=int)
-	parser.add_argument("--number-of-clauses", default=10, type=int)
-	parser.add_argument("--T", default=100, type=int)
-	parser.add_argument("--s", default=1.0, type=float)
-	parser.add_argument("--number-of-state-bits", default=8, type=int)
-	parser.add_argument("--depth", default=2, type=int)
-	parser.add_argument("--hypervector-size", default=32, type=int)
-	parser.add_argument("--hypervector-bits", default=2, type=int)
-	parser.add_argument("--message-size", default=256, type=int)
-	parser.add_argument("--message-bits", default=2, type=int)
-	parser.add_argument("--double-hashing", dest="double_hashing", default=False, action="store_true")
-	parser.add_argument("--noise", default=0.01, type=float)
-	parser.add_argument("--number-of-examples", default=10000, type=int)
-	parser.add_argument("--max-included-literals", default=4, type=int)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--epochs", default=10, type=int)
+    parser.add_argument("--number-of-clauses", default=10, type=int)
+    parser.add_argument("--T", default=100, type=int)
+    parser.add_argument("--s", default=1.0, type=float)
+    parser.add_argument("--number-of-state-bits", default=8, type=int)
+    parser.add_argument("--depth", default=2, type=int)
+    parser.add_argument("--hypervector-size", default=32, type=int)
+    parser.add_argument("--hypervector-bits", default=2, type=int)
+    parser.add_argument("--message-size", default=256, type=int)
+    parser.add_argument("--message-bits", default=2, type=int)
+    parser.add_argument('--double-hashing', dest='double_hashing', default=False, action='store_true')
+    parser.add_argument('--one-hot-encoding', dest='one_hot_encoding', default=False, action='store_true')
+    parser.add_argument("--noise", default=0.01, type=float)
+    parser.add_argument("--number-of-examples", default=10000, type=int)
+    parser.add_argument("--max-included-literals", default=4, type=int)
 
 	args = parser.parse_args()
 	for key, value in kwargs.items():
@@ -38,11 +38,14 @@ print("Creating training data")
 # Create train data
 
 graphs_train = Graphs(
-	args.number_of_examples,
-	symbols=["A", "B"],
-	hypervector_size=args.hypervector_size,
-	hypervector_bits=args.hypervector_bits,
+    args.number_of_examples,
+    symbols=['A', 'B'],
+    hypervector_size=args.hypervector_size,
+    hypervector_bits=args.hypervector_bits,
+    one_hot_encoding=args.one_hot_encoding
 )
+
+print(args.one_hot_encoding)
 
 for graph_id in range(args.number_of_examples):
 	graphs_train.set_number_of_graph_nodes(graph_id, 2)
@@ -118,15 +121,16 @@ for graph_id in range(args.number_of_examples):
 graphs_test.encode()
 
 tm = MultiClassGraphTsetlinMachine(
-	args.number_of_clauses,
-	args.T,
-	args.s,
-	number_of_state_bits=args.number_of_state_bits,
-	depth=args.depth,
-	message_size=args.message_size,
-	message_bits=args.message_bits,
-	max_included_literals=args.max_included_literals,
-	double_hashing=args.double_hashing,
+    args.number_of_clauses,
+    args.T,
+    args.s,
+    number_of_state_bits = args.number_of_state_bits,
+    depth = args.depth,
+    message_size = args.message_size,
+    message_bits = args.message_bits,
+    max_included_literals = args.max_included_literals,
+    double_hashing = args.double_hashing,
+    one_hot_encoding = args.one_hot_encoding
 )
 
 for i in range(args.epochs):
@@ -147,14 +151,14 @@ for i in range(args.epochs):
 
 weights = tm.get_state()[1].reshape(2, -1)
 for i in range(tm.number_of_clauses):
-	print("Clause #%d W:(%d %d)" % (i, weights[0, i], weights[1, i]), end=" ")
-	l = []
-	for k in range(args.hypervector_size * 2):
-		if tm.ta_action(0, i, k):
-			if k < args.hypervector_size:
-				l.append("x%d" % (k))
-			else:
-				l.append("NOT x%d" % (k - args.hypervector_size))
+        print("Clause #%d W:(%d %d)" % (i, weights[0,i], weights[1,i]), end=' ')
+        l = []
+        for k in range(graphs_train.hypervector_size * 2):
+            if tm.ta_action(0, i, k):
+                if k < graphs_train.hypervector_size:
+                    l.append("x%d" % (k))
+                else:
+                    l.append("NOT x%d" % (k - graphs_train.hypervector_size))
 
 	# for k in range(args.message_size * 2):
 	#     if tm.ta_action(1, i, k):

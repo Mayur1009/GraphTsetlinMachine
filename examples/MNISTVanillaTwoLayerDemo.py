@@ -22,7 +22,7 @@ def default_args(**kwargs):
     parser.add_argument("--T", default=25000, type=int)
     parser.add_argument("--s", default=10.0, type=float)
     parser.add_argument("--number-of-state-bits", default=8, type=int)
-    parser.add_argument("--depth", default=1, type=int)
+    parser.add_argument("--depth", default=2, type=int)
     parser.add_argument("--hypervector-size", default=1024, type=int)
     parser.add_argument("--hypervector-bits", default=2, type=int)
     parser.add_argument("--message-size", default=256, type=int)
@@ -38,7 +38,8 @@ def default_args(**kwargs):
 
 args = default_args()
 
-number_of_nodes = 1
+number_of_nodes = 2
+number_of_outgoing_edges = 1
 
 symbols = []
 
@@ -60,17 +61,22 @@ for graph_id in range(X_train.shape[0]):
 graphs_train.prepare_node_configuration()
 
 for graph_id in range(X_train.shape[0]):
-    number_of_outgoing_edges = 0
-    graphs_train.add_graph_node(graph_id, 'Image Node', number_of_outgoing_edges)
+    graphs_train.add_graph_node(graph_id, 'Image Node 1', number_of_outgoing_edges, node_type_name = 'Layer 1')
+    graphs_train.add_graph_node(graph_id, 'Image Node 2', number_of_outgoing_edges, node_type_name = 'Layer 2')
 
 graphs_train.prepare_edge_configuration()
+
+for graph_id in range(X_train.shape[0]):
+    edge_type = "Plain"
+    graphs_train.add_graph_node_edge(graph_id, 'Image Node 1', 'Image Node 2', edge_type)
+    graphs_train.add_graph_node_edge(graph_id, 'Image Node 2', 'Image Node 1', edge_type)
 
 for graph_id in range(X_train.shape[0]):
     if graph_id % 1000 == 0:
         print(graph_id, X_train.shape[0])
     
     for k in X_train[graph_id].nonzero()[0]:
-        graphs_train.add_graph_node_property(graph_id, 'Image Node', "W%d,%d" % (k // 28, k % 28))
+        graphs_train.add_graph_node_property(graph_id, 'Image Node 1', "W%d,%d" % (k // 28, k % 28))
 
 graphs_train.encode()
 
@@ -78,23 +84,29 @@ print("Training data produced")
 
 graphs_test = Graphs(X_test.shape[0], init_with=graphs_train)
 
+
 for graph_id in range(X_test.shape[0]):
     graphs_test.set_number_of_graph_nodes(graph_id, number_of_nodes)
 
 graphs_test.prepare_node_configuration()
 
 for graph_id in range(X_test.shape[0]):
-    number_of_outgoing_edges = 0
-    graphs_test.add_graph_node(graph_id, 'Image Node', number_of_outgoing_edges)
+    graphs_test.add_graph_node(graph_id, 'Image Node 1', number_of_outgoing_edges, node_type_name = 'Layer 1')
+    graphs_test.add_graph_node(graph_id, 'Image Node 2', number_of_outgoing_edges, node_type_name = 'Layer 2')
 
 graphs_test.prepare_edge_configuration()
+
+for graph_id in range(X_test.shape[0]):
+    edge_type = "Plain"
+    graphs_test.add_graph_node_edge(graph_id, 'Image Node 1', 'Image Node 2', edge_type)
+    graphs_test.add_graph_node_edge(graph_id, 'Image Node 2', 'Image Node 1', edge_type)
 
 for graph_id in range(X_test.shape[0]):
     if graph_id % 1000 == 0:
         print(graph_id, X_test.shape[0])
     
     for k in X_test[graph_id].nonzero()[0]:
-        graphs_test.add_graph_node_property(graph_id, 'Image Node', "W%d,%d" % (k // 28, k % 28))
+        graphs_test.add_graph_node_property(graph_id, 'Image Node 1', "W%d,%d" % (k // 28, k % 28))
 
 graphs_test.encode()
 
