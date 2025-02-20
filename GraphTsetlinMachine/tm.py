@@ -326,7 +326,6 @@ class CommonTsetlinMachine:
 		self.ta_state = np.array([])
 		self.clause_weights = np.array([])
 
-	# TODO: Test save and load
 	def save(self, fname=""):
 		# Copy data from GPU to CPU
 		if np.array_equal(self.ta_state, np.array([])):
@@ -371,7 +370,7 @@ class CommonTsetlinMachine:
 			"message_size": self.message_size,
 			"message_bits": self.message_bits,
 			"double_hashing": self.double_hashing,
-			"one_hot_encoding": self.one_hot_encoding,
+			# "one_hot_encoding": self.one_hot_encoding, # TODO: When merged
 		}
 
 		# Save to file
@@ -406,7 +405,7 @@ class CommonTsetlinMachine:
 		self.negative_clauses = state_dict["negative_clauses"]
 		self.max_number_of_graph_nodes = state_dict["max_number_of_graph_nodes"]
 
-		# Message size can change if one-hot encoding is used
+		# Message size can change if one-hot encoding is used (when merged)
 		self.message_size = state_dict["message_size"]
 
 		# Initialize variables required in the _init() function
