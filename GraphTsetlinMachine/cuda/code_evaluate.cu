@@ -272,7 +272,7 @@ __global__ void prepare_messages(int number_of_nodes, unsigned int *clause_X_int
     }
 }
 
-__global__ void exchange_messages(int number_of_nodes, int *hypervectors, int *global_clause_node_output,
+__global__ void exchange_messages(int number_of_nodes, int *hypervectors, unsigned int *global_clause_node_output,
                                   int node_index, int global_edge_index, int *number_of_graph_node_edges, int *edge,
                                   unsigned int *clause_X_int) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -287,8 +287,8 @@ __global__ void exchange_messages(int number_of_nodes, int *hypervectors, int *g
 
         int edge_index = global_edge_index;
         for (int source_node = 0; source_node < number_of_nodes; ++source_node) {
-            int source_node_chunk = source_node / INT_SIZE;
-            int source_node_pos = source_node % INT_SIZE;
+            unsigned int source_node_chunk = source_node / INT_SIZE;
+            unsigned int source_node_pos = source_node % INT_SIZE;
 
             if ((global_clause_node_output[clause * NODE_CHUNKS + source_node_chunk] & (1 << source_node_pos)) > 0) {
                 for (int i = 0; i < number_of_graph_node_edges[node_index + source_node]; ++i) {
